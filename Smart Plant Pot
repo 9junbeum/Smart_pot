@@ -1,0 +1,178 @@
+#include <LiquidCrystal_I2C.h>
+#include <Wire.h>
+#include <DS1302.h>
+
+#define Sensor A0 //아날로그 A0 수분감지센서
+#define menu_BT 4 //디지털 4 메뉴버튼
+#define ok_BT 5   //디지털 5 확인버튼
+#define up_BT 6   //디지털 6 위 버튼
+#define down_BT 7 //디지털 7 아래버튼
+#define Pump 3   //디지털 11 펌프버튼
+
+DS1302 rtc(8,9,10);                 //RTC(RealTimeClock모듈)
+LiquidCrystal_I2C lcd(0x27,16,2);   //LCD화면
+
+int value = 0;
+int Water_Percent = 0;
+int period =0;                  //전역변수 급수주기
+int hum = 50;                   //전역변수 습도값 기본값은 50
+int sel_period = 0;             //선택된 주기
+int sel_hum= 0;                 //선택된 습도
+int mode = 0;                   //전역변수 모드 값 
+int count = 0;
+//-----------------------------------------------------------------------------
+void setup() {
+  pinMode(Pump,OUTPUT);//펌프 11번
+  pinMode(down_BT,INPUT);//하 버튼 7번
+  pinMode(up_BT,INPUT);//상 버튼 6번
+  pinMode(ok_BT,INPUT);//확인버튼 5번
+  pinMode(menu_BT,INPUT);//메뉴버튼 4번
+  
+  Serial.begin(9600);//시리얼 통신 속도
+  
+  rtc.halt(false);         //동작모드
+  rtc.writeProtect(true);  //쓰기 방지
+  
+  /*
+  rtc.setDOW(SUNDAY); //현재 요일 정보 입력
+  rtc.setTime(11, 50, 00); //현재 시간 정보 입력
+  rtc.setDate(11, 10, 2020); //현재 날짜 정보 입력
+  */
+
+  lcd.init();                     //lcd초기화
+  lcd.backlight();                //backlight 켜기
+  lcd.setCursor(0,0);             
+  lcd.print("Smart Plant Pot");   //로딩화면
+  lcd.setCursor(0,1);
+  lcd.print("Loading...");        //로딩화면
+  delay(1000);
+}
+
+//-----------------------------------------------------------------------------
+void loop() {
+  
+    value= analogRead(Sensor);                    //아날로그 센서 값 읽어서 value에 저장
+    Water_Percent = map(value, 1023, 0, 0, 100);  //map함수 이용 퍼센트로 변경
+
+   if((rtc.getHour()==10) && (rtc.getMin()==00) && (rtc.getSec()==00))  //급수는 오전 10시에 실행됩니다.
+    {
+      count=count + 1;
+      delay(1000);                  //1초 내 여러번 증가하는 것을 방지
+    }
+      
+  if(digitalRead(menu_BT)==HIGH)    //메뉴버튼으로 모드 제어하기
+  {
+    mode = mode + 1;
+    if(mode == 3)                   //메뉴는 0~2 까지
+    {
+      mode = 0;                     //3 이상 넘어가면 초기화
+    }
+    lcd.clear();
+    lcd.setCursor(0,0);
+    lcd.print("menu:");
+    lcd.print(mode);
+    delay(300);                  //입력 지연은 0.3초
+  }
+////////////////////////////////switch문////////////////////////////////
+switch(mode){
+  //------------------------------------------------------------ case 0
+  case 0://기본모드, 토양의 수분량과 현재시간을 알려준다.
+    {
+    lcd.clear();
+    lcd.setCursor(0,0);
+    lcd.print("Water:");
+    lcd.print(Water_Percent);
+    lcd.print("%");
+    lcd.setCursor(0,1);
+    lcd.print(rtc.getTimeStr());
+    delay(100);                                       //0.1초동안 보여줌
+    hum = sel_hum;
+    period = sel_period;
+    break;
+    }
+  //------------------------------------------------------------ case 1
+  case 1://메뉴 1, 물주는 습도 설정(입력값보다 습도가 낮아지면 물을 준다.)
+    {
+    lcd.clear();
+    lcd.setCursor(0,0);
+    lcd.print("Humidity:");
+    lcd.print(hum);
+    delay(100);
+    if(digitalRead(ok_BT)==HIGH) // ok버튼이 눌렸을 때
+    {
+       lcd.clear();
+       lcd.setCursor(0,0);
+       lcd.print("Humidity");
+       lcd.setCursor(0,1);
+       lcd.print("set:");
+       lcd.print(hum);
+       sel_hum = hum;
+       delay(1000);
+    }
+      if(digitalRead(up_BT)==HIGH) // up버튼 누르면 hum+1
+      {
+        hum = hum+5;
+        if(hum > 100)
+        {
+          hum = 0;
+        }
+      }
+     if(digitalRead(down_BT)==HIGH)// down버튼 누르면 hum-1
+      {
+       hum = hum-5;
+         if(hum <0)
+         {
+            hum = 100;
+         }
+      }
+    break;
+    }
+  //------------------------------------------------------------ case 2
+  case 2://메뉴 2. 식물종류에 따라 물주는 주기 변경(1:아주 가끔 2: 보통 3: 매우 자주)
+   {
+    lcd.clear();
+    lcd.setCursor(0,0);
+    lcd.print("Period:");
+    lcd.print(period);
+    delay(100);
+    if(digitalRead(ok_BT)==HIGH)          // ok버튼이 눌렸을 때
+    { 
+    lcd.clear();
+    lcd.setCursor(0,0);
+    lcd.print("Period");
+    lcd.setCursor(0,1);
+    lcd.print("set:");
+    lcd.print(period);
+    sel_period = period;
+    delay(1000);
+    
+    }
+    
+      if(digitalRead(up_BT)==HIGH)         //up 버튼이 눌렸을 때
+      {
+         period = period + 1;
+         if(period>31)
+         {
+           period = 0;
+         }
+       }
+       if(digitalRead(down_BT)==HIGH)      //down 버튼이 눌렸을 때
+       {
+          period = period - 1;
+          if(period<0)
+          {
+           period = 31;
+          } 
+       }
+   break;
+   }
+}
+
+if((Water_Percent < hum)&&(count==period))
+   {
+    digitalWrite(Pump, HIGH);     //물을 준다.
+    delay(20000);  //30000ms=30s  //20초동안
+    digitalWrite(Pump,LOW);       //물을 끈다.
+    count = 0;                    //주고나면 count = 0으로 설정해서 더이상 안나오게 한다.
+   }
+}
