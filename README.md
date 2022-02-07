@@ -16,3 +16,6 @@ Arduino code Repository
 
 # 유튜브 주소 
 https://www.youtube.com/watch?v=wkc9DR2HleY
+
+# 개선 코드
+-> 인터럽트 방식을 이용해 sleep의 단점을 최소화
